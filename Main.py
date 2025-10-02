@@ -32,6 +32,7 @@ kdf = PBKDF2HMAC(
 def main_menu():
     print("1 : NEW DATABASE")
     print("2 : LOAD DATABASE")
+    print("3 : EXIT")
     option = input("Select an option: ")  
 
     os.system('cls')
@@ -39,6 +40,8 @@ def main_menu():
         create_database()
     elif option == "2":
         load_database()
+    elif option == "3":
+        exit()
     os.system('cls')
 
 def create_database():
@@ -154,7 +157,7 @@ def load_database():
             elif option == "4":
                 delete_entry(dbData, db_path)
             elif option == "5":
-                return
+                main_menu()
             else:
                 print("Invalid option.")
                 inner_menu()

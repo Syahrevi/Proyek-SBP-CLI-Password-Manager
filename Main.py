@@ -310,4 +310,7 @@ def list_databases():
             main_menu()
 #Mulai Program=====================================================================
 
+if not os.path.exists(DB_DIR):
+    os.makedirs(DB_DIR)
+    
 main_menu()

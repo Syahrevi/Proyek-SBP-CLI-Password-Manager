@@ -7,11 +7,13 @@ import os
 import base64
 import tempfile
 
+import atom
+
 # initialization=====================================================================
 {
   "DBInfo": { "Password": "", "Key": "" },
   "detail": [
-    { "Username": "...", "Password": "...", "Note": "..." }
+    { "No":"...", "Username": "...", "Password": "...", "Note": "..." }
   ]
 }
 
@@ -31,10 +33,13 @@ def main_menu():
     print("1 : NEW DATABASE")
     print("2 : LOAD DATABASE")
     option = input("Select an option: ")  
+
+    os.system('cls')
     if option == "1":
         create_database()
     elif option == "2":
         load_database()
+    os.system('cls')
 
 def create_database():
     dbNameInput = input("Enter database name: ")
@@ -73,23 +78,8 @@ def create_database():
                 os.remove(tmp_path)
             except OSError:
                 pass
+    os.system('cls')
     main_menu()
-
-def atomic_write(path, obj):
-    dirpath = os.path.dirname(os.path.abspath(path)) or "."
-    fd, tmp_path = tempfile.mkstemp(dir=dirpath, prefix="dbtmp-", suffix=".json")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as tf:
-            json.dump(obj, tf, indent=4, ensure_ascii=False)
-            tf.flush()
-            os.fsync(tf.fileno())
-        os.replace(tmp_path, path)
-    finally:
-        if os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
 
 def load_database():
     list_databases()
@@ -136,6 +126,7 @@ def load_database():
         main_menu()
 
     print("Database loaded successfully.")
+    os.system('cls')
 
     # buat cek kelengkapan dan kebenaran file json
     if "detail" not in dbData or dbData["detail"] is None:
@@ -152,6 +143,7 @@ def load_database():
             print("4 : DELETE ENTRY")
             print("5 : EXIT")
             option = input("Select an option: ").strip()
+            os.system('cls')
 
             if option == "1":
                 add_entry(dbData, db_path)
@@ -167,6 +159,7 @@ def load_database():
                 print("Invalid option.")
                 inner_menu()
     inner_menu()
+    os.system('cls')    
     
 def add_entry(dbData, db_path, check_duplicate=True):
     username = input("Enter username: ").strip()
@@ -185,7 +178,14 @@ def add_entry(dbData, db_path, check_duplicate=True):
     enc_password = fernet.encrypt(password.encode()).decode()
     enc_note = fernet.encrypt(note.encode()).decode()
 
-    new_entry = {"Username": enc_username, "Password": enc_password, "Note": enc_note}
+    # Determine the next available No
+    if dbData["detail"]:
+        max_no = max((int(x["No"]) for x in dbData["detail"] if "No" in x and str(x["No"]).isdigit()), default=0)
+        no = max_no + 1
+    else:
+        no = 1
+
+    new_entry = {"No": str(no), "Username": enc_username, "Password": enc_password, "Note": enc_note}
 
     # duplicate check
     if check_duplicate:
@@ -199,12 +199,11 @@ def add_entry(dbData, db_path, check_duplicate=True):
                 return
 
     dbData["detail"].append(new_entry)
-    atomic_write(db_path, dbData)
+    atom.atomic_write(db_path, dbData)
     print("New entry added.")
+    os.system('cls')
 
-# Placeholder stubs you should implement
 def list_databases():
-    # show files in DB_DIR
     if not os.path.exists(DB_DIR):
         print("No database directory.")
         return
@@ -214,9 +213,6 @@ def list_databases():
     else:
         for f in files:
             print("-", f)
-
-def edit_entry(dbData, db_path):
-    print("Edit entry not implemented yet.")
 
 def list_entries(dbData):
     if not dbData["detail"]:
@@ -240,7 +236,67 @@ def list_entries(dbData):
         print(f"{i}. Username: {username}  Password: {password}  Note: {note}")
 
 def delete_entry(dbData, db_path):
-    print("Delete entry not implemented yet.")
+    if not dbData["detail"]:
+        print("No entries to delete.")
+        return
+    list_entries(dbData)
+    try:
+        entry_no = int(input("Enter the No of the entry to delete: ").strip())
+    except ValueError:
+        print("Invalid input.")
+        return
+    for i, item in enumerate(dbData["detail"]):
+        if int(item.get("No", -1)) == entry_no:
+            del dbData["detail"][i]
+            atom.atomic_write(db_path, dbData)
+            print(f"Entry No {entry_no} deleted.")
+            return
+    print(f"No entry found with No {entry_no}.")
+    os.system('cls')
+
+def edit_entry(dbData, db_path):
+    if not dbData["detail"]:
+        print("No entries to edit.")
+        return
+    list_entries(dbData)
+    try:
+        entry_no = int(input("Enter the No of the entry to edit: ").strip())
+    except ValueError:
+        print("Invalid input.")
+        return
+    for item in dbData["detail"]:
+        if int(item.get("No", -1)) == entry_no:
+            db_key = dbData["DBInfo"]["Key"].encode()
+            fernet = Fernet(db_key)
+            try:
+                current_username = fernet.decrypt(item.get('Username', '').encode()).decode()
+            except Exception:
+                current_username = ""
+            try:
+                current_password = fernet.decrypt(item.get('Password', '').encode()).decode()
+            except Exception:
+                current_password = ""
+            try:
+                current_note = fernet.decrypt(item.get('Note', '').encode()).decode()
+            except Exception:
+                current_note = ""
+
+            new_username = input(f"Enter new username (leave blank to keep '{current_username}'): ").strip()
+            new_password = getpass.getpass("Enter new password (leave blank to keep current): ")
+            new_note = input(f"Enter new note (leave blank to keep current): ").strip()
+
+            if new_username:
+                item["Username"] = fernet.encrypt(new_username.encode()).decode()
+            if new_password:
+                item["Password"] = fernet.encrypt(new_password.encode()).decode()
+            if new_note:
+                item["Note"] = fernet.encrypt(new_note.encode()).decode()
+
+            atom.atomic_write(db_path, dbData)
+            print(f"Entry No {entry_no} updated.")
+            return
+    print(f"No entry found with No {entry_no}.")
+    os.system('cls')
 
 def list_databases():
         files = os.listdir("./database")
@@ -255,11 +311,3 @@ def list_databases():
 #Mulai Program=====================================================================
 
 main_menu()
-# print(password)
-# key = Fernet.generate_key()
-# f = Fernet(key)
-# token = f.encrypt(b"my deep dark secret")
-# token
-# b'...'
-# f.decrypt(token)
-# b'my deep dark secret'
